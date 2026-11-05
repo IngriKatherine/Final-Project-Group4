@@ -1,0 +1,113 @@
+# =============================================================================
+# Central configuration for the whole pipeline.
+# Every script reads this file, so change settings here, not inside scripts.
+# =============================================================================
+
+seed: 42
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  results_dir: results
+
+# -----------------------------------------------------------------------------
+# Data (01_fetch_data.py, 02_preprocess.py)
+# -----------------------------------------------------------------------------
+data:
+  start_date: "2000-01-01"
+  end_date: "2025-12-31"
+  frequency: "B"            # "B" = business daily, "W-FRI" = weekly (Friday close)
+  target: "WTI"             # "WTI" or "BRENT" (column name after renaming below)
+
+  # FRED series are downloaded as CSV from fred.stlouisfed.org (no API key needed).
+  fred_series:
+    WTI: DCOILWTICO         # WTI spot price, USD/bbl
+    BRENT: DCOILBRENTEU     # Brent spot price, USD/bbl
+    USD_BROAD: DTWEXBGS     # Nominal broad US dollar index (starts 2006)
+    UST10Y: DGS10           # 10-year Treasury yield
+    UST2Y: DGS2             # 2-year Treasury yield
+    FEDFUNDS: DFF           # Effective federal funds rate
+    BREAKEVEN10Y: T10YIE    # 10-year breakeven inflation (starts 2003)
+
+  # Yahoo Finance tickers (downloaded with yfinance, adjusted close).
+  yahoo_tickers:
+    DXY: "DX-Y.NYB"         # ICE US dollar index
+    GOLD: "GC=F"            # Gold futures
+    SP500: "^GSPC"          # S&P 500 index
+    VIX: "^VIX"             # Equity volatility index
+    NATGAS: "NG=F"          # Henry Hub natural gas futures
+    XLE: "XLE"              # Energy sector ETF
+
+  # How to treat WTI's negative print on 2020-04-20 (-37.63 USD/bbl).
+  # "clip" -> floor at min_price, "drop" -> remove the day, "keep" -> leave it.
+  negative_price_policy: "clip"
+  min_price: 1.0
+
+# -----------------------------------------------------------------------------
+# Train / validation / test split (chronological, never shuffled)
+# -----------------------------------------------------------------------------
+split:
+  train_end: "2018-12-31"
+  val_end: "2021-12-31"     # test = everything after val_end
+
+# -----------------------------------------------------------------------------
+# Supervised framing
+# -----------------------------------------------------------------------------
+framing:
+  lookback: 30              # input window length (time steps)
+  horizons: [1, 5, 20]      # steps ahead; direct strategy = one model per horizon
+  target_transform: "log_return"   # "log_return" (recommended) or "level"
+  feature_transform: "log_return"  # transform for price-like features; rates use first differences
+
+# -----------------------------------------------------------------------------
+# Models (04_train_rnn.py)
+# -----------------------------------------------------------------------------
+model:
+  type: "lstm"              # "lstm" or "gru"
+  hidden_size: 64
+  num_layers: 2
+  dropout: 0.2
+  bidirectional: false
+
+training:
+  batch_size: 64
+  max_epochs: 200
+  learning_rate: 0.001
+  weight_decay: 0.0
+  patience: 20              # early stopping on validation loss
+  grad_clip: 1.0
+  loss: "mse"               # "mse" or "huber"
+  num_workers: 0
+
+# -----------------------------------------------------------------------------
+# Baselines (03_baselines.py)
+# -----------------------------------------------------------------------------
+baselines:
+  arima_order: [1, 1, 1]    # set auto: true to search with pmdarima instead
+  auto: false
+  refit_every: 20           # refit ARIMA every N test steps (rolling origin)
+
+# -----------------------------------------------------------------------------
+# SHAP (05_shap_analysis.py)
+# -----------------------------------------------------------------------------
+shap:
+  explainer: "gradient"     # "gradient" (on the RNN) or "tree" (LightGBM surrogate, as in Okasha & Zaher 2026)
+  background_size: 200      # samples from TRAIN used as background
+  explain_size: 500         # samples from VALIDATION that are explained
+  selection_rule: "top_k"   # "top_k" or "cumulative"
+  top_k: 4
+  cumulative_threshold: 0.80
+
+# -----------------------------------------------------------------------------
+# Experiments (06_run_experiments.py, 07_ablations.py)
+# -----------------------------------------------------------------------------
+experiments:
+  models: ["lstm", "gru"]
+  feature_sets: ["price_only", "all", "shap_selected"]
+  seeds: [0, 1, 2]
+
+ablations:
+  hidden_size: [32, 64, 128]
+  num_layers: [1, 2, 3]
+  lookback: [10, 30, 60]
+  dropout: [0.0, 0.2, 0.4]
