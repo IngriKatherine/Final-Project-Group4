@@ -67,6 +67,8 @@ def main(cfg: dict | None = None):
                 df.loc[bad, col] = d["min_price"]
             elif d["negative_price_policy"] == "drop":
                 df = df.loc[~bad]
+            elif d["negative_price_policy"] == "interpolate":
+                df[col] = df[col].mask(bad).interpolate(method="time")
 
     # 5. keep only rows where all series exist
     print("First valid date per series:")
