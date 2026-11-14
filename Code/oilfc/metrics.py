@@ -26,8 +26,14 @@ def mape(y, yhat, eps: float = 1e-8) -> float:
 
 
 def directional_accuracy(y, yhat, base) -> float:
-    """Share of forecasts that get the sign of the move (P_{t+h} - P_t) right."""
+    """Share of forecasts that get the sign of the move (P_{t+h} - P_t) right.
+
+    NaN for a forecaster that never predicts a move (the random walk): its "accuracy"
+    would only count the days the price happened not to change.
+    """
     y, yhat, base = map(np.asarray, (y, yhat, base))
+    if np.all(yhat == base):
+        return float("nan")
     return float(np.mean(np.sign(y - base) == np.sign(yhat - base)))
 
 
