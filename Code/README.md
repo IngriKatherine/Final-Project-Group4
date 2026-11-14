@@ -21,7 +21,7 @@ Run every script from inside `Code/`.
 |---|--------|--------------|--------------|-------|
 | 1 | `01_fetch_data.py` | Downloads WTI, Brent, rates and the broad dollar index from FRED, plus DXY, gold, S&P 500, VIX, natural gas and XLE from Yahoo Finance | `data/raw/fred.csv`, `data/raw/yahoo.csv` | Data & baselines |
 | 2 | `02_preprocess.py` | Aligns calendars, fills short gaps, handles the negative WTI price of 20 April 2020, trims to the common sample, writes descriptive statistics | `data/processed/levels.csv`, `results/tables/descriptive_stats.csv`, `correlations.csv` | Data & baselines |
-| 3 | `03_baselines.py` | Random walk and rolling-origin ARIMA on the same test origins the networks use | `results/predictions/baseline_*.csv`, `results/tables/baselines_metrics.csv` | Data & baselines |
+| 3 | `03_baselines.py` | Random walk, rolling-origin ARIMA and ARIMAX (lagged drivers as exogenous inputs) on the same test origins the networks use; ARIMA order fixed or chosen by `auto_arima` on train | `results/predictions/baseline_*.csv`, `results/tables/baselines_metrics.csv`, `baselines_arima_order.json` | Data & baselines |
 | 4 | `04_train_rnn.py` | Trains one LSTM or GRU for a given feature set, horizon and seed. Other scripts call it in loops | `results/models/*.pt`, `results/predictions/*.csv`, `results/tables/runs/*.json` | Modeling |
 | 5 | `05_shap_analysis.py` | Explains the all-features LSTM with SHAP (on validation data), ranks the features and saves the selected subset per horizon | `results/shap/*`, `results/figures/shap_*.png` | SHAP |
 | 6 | `06_run_experiments.py` | Main grid: {LSTM, GRU} × {price only, all, SHAP-selected} × horizons × seeds | `results/tables/main_results.csv` | Modeling + SHAP |
