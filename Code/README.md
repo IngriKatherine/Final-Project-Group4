@@ -44,6 +44,18 @@ python 08_make_figures_tables.py
 Scripts 04–07 skip runs that already have results, so you can stop and restart them.
 Use `--force` to retrain.
 
+## Presentation app
+
+The final presentation is an interactive Streamlit site that reads everything above from
+`data/` and `results/`. From this folder:
+
+```bash
+pip install -r presentation/requirements-presentation.txt
+streamlit run presentation/app.py
+```
+
+See [`presentation/README.md`](presentation/README.md) for the slides and presenter tools.
+
 ## Shared package `oilfc/`
 
 | Module | Contents |
