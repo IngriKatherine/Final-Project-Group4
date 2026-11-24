@@ -1,0 +1,20 @@
+# Streamlit settings for the presentation app (presentation/app.py).
+# Streamlit reads this file when you start it from the Code/ folder.
+
+[theme]
+base = "light"
+primaryColor = "#A85D0C"
+backgroundColor = "#F3F5F6"
+secondaryBackgroundColor = "#EAEEF0"
+textColor = "#15212B"
+font = "Archivo:https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&display=swap, sans-serif"
+baseRadius = "6px"
+
+[server]
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"

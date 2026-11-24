@@ -1,0 +1,10 @@
+# Extra packages for the presentation app (presentation/app.py).
+# Versions follow the course's Streamlit examples (Data-Visualization/streamlit).
+# Install on top of Code/requirements.txt:
+#     pip install -r requirements.txt -r presentation/requirements-presentation.txt
+#
+# torch, numpy, pandas, scipy, scikit-learn and pyyaml already come from Code/requirements.txt.
+# torch is only needed for the "Model lab" slide; every other slide runs without it.
+
+streamlit==1.60.0
+plotly==6.2.0

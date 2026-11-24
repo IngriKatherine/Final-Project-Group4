@@ -1,0 +1,27 @@
+{
+  "horizon": 5,
+  "explainer": "gradient",
+  "rule": "top_k",
+  "selected": [
+    "BRENT",
+    "SP500",
+    "UST10Y",
+    "VIX"
+  ],
+  "always_included": "WTI",
+  "ranking": [
+    "WTI",
+    "BRENT",
+    "SP500",
+    "UST10Y",
+    "VIX",
+    "UST2Y",
+    "XLE",
+    "GOLD",
+    "USD_BROAD",
+    "DXY",
+    "NATGAS",
+    "BREAKEVEN10Y",
+    "FEDFUNDS"
+  ]
+}
