@@ -16,3 +16,6 @@ Thumbs.db
 
 # Office temp files (Word / PowerPoint lock files)
 ~$*
+
+Code/results/sample_start_check/*
+!Code/results/sample_start_check/validation_summary.*
