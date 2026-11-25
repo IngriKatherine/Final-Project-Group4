@@ -16,7 +16,8 @@ h = c1.segmented_control("Horizon", hs, default=hs[0], required=True,
                          format_func=lambda x: f"{x} day" + ("s" if x > 1 else ""))
 cfgs = L.configs(h)
 labels = {L.config_label(*c): c for c in cfgs}
-default = [k for k in labels if labels[k][0] in ("rw", "lstm", "gru")][:4]
+default = [k for k in labels if labels[k][0] in ("rw", "arima", "arimax")][:2] + \
+          [k for k in labels if labels[k][0] not in L.BASELINES and labels[k][1] == "price_only"][:3]
 chosen = c2.multiselect("Models", list(labels), default=default)
 
 data = {k: L.forecasts(*labels[k], h) for k in chosen}
@@ -42,8 +43,7 @@ for k, d in data.items():
     if d["n_seeds"].iloc[0] > 1:
         fig.add_trace(go.Scatter(x=pd.concat([d.target_date, d.target_date[::-1]]),
                                  y=pd.concat([d.pred_price + d.pred_std, (d.pred_price - d.pred_std)[::-1]]),
-                                 fill="toself", fillcolor="rgba(235,104,52,0.12)" if f == "all" else
-                                 "rgba(42,120,214,0.12)" if f == "price_only" else "rgba(27,175,122,0.12)",
+                                 fill="toself", fillcolor=theme.rgba(theme.config_color(m, f), 0.12),
                                  line=dict(width=0), hoverinfo="skip", showlegend=False, legendgroup=k))
     fig.add_trace(go.Scatter(x=d.target_date, y=d.pred_price, name=k, mode="lines", legendgroup=k,
                              line=dict(color=theme.config_color(m, f), width=1.4, dash=theme.config_dash(m))))

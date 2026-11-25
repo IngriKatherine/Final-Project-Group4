@@ -32,9 +32,12 @@ CRUDE_SOFT = "#F4E6D3"
 # Categorical slots (validated for colour-vision deficiency, adjacent pairs).
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
 
-FEATURE_SET_COLORS = {"price_only": BLUE, "all": ORANGE, "shap_selected": AQUA}
-BASELINE_COLORS = {"rw": "#9AA4AB", "arima": "#5F6B74"}
-MODEL_DASH = {"lstm": "solid", "gru": "dot"}
+PURPLE, PINK = "#6250d6", "#e87ba4"
+FEATURE_SET_COLORS = {"price_only": BLUE, "all": ORANGE, "shap_selected": "#7A5AF8",
+                      "ais": PINK, "satellite": AQUA, "satellite_ais": "#0E7C55"}
+BASELINE_COLORS = {"rw": "#9AA4AB", "arima": "#5F6B74", "arimax": "#2F3A42"}
+MODEL_COLORS = {"imgcnn": YELLOW, "cnn": YELLOW}        # models whose colour is their own, not the input set's
+MODEL_DASH = {"lstm": "solid", "gru": "dot", "imgcnn": "dashdot", "cnn": "dashdot"}
 SERIES_COLORS = {"WTI": BLUE, "BRENT": ORANGE}
 
 # Sequential (magnitude) and diverging (polarity) ramps.
@@ -47,11 +50,17 @@ FONT = "Archivo, 'Helvetica Neue', Arial, sans-serif"
 
 
 def config_color(model: str, features: str) -> str:
-    return BASELINE_COLORS.get(model) or FEATURE_SET_COLORS.get(features, INK)
+    return BASELINE_COLORS.get(model) or MODEL_COLORS.get(model) or FEATURE_SET_COLORS.get(features, INK)
 
 
 def config_dash(model: str) -> str:
-    return {"rw": "solid", "arima": "dash"}.get(model, MODEL_DASH.get(model, "solid"))
+    return {"rw": "solid", "arima": "dash", "arimax": "longdash"}.get(model, MODEL_DASH.get(model, "solid"))
+
+
+def rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"
 
 
 # ---------------------------------------------------------- plotly template ---
@@ -183,6 +192,15 @@ h1, h2, h3 {{ color: var(--ink); letter-spacing: -0.012em; }}
 .paper dt {{ color: var(--ink-2); font-size: 0.88rem; }}
 .paper dd {{ margin: 0; font-size: 0.95rem; }}
 .paper .finding {{ margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--rule); font-weight: 600; }}
+
+.family {{ background: var(--surface); border: 1px solid var(--rule); border-top: 4px solid var(--fam);
+  border-radius: 8px; padding: 0.9rem 1rem; height: 100%; }}
+.family .name {{ font-stretch: 110%; font-weight: 700; font-size: 1.08rem; }}
+.family .models {{ color: var(--ink-2); font-size: 0.9rem; margin: 0.15rem 0 0.6rem; }}
+.family dl {{ display: grid; grid-template-columns: 4.2rem 1fr; gap: 0.3rem 0.6rem; margin: 0; font-size: 0.9rem; }}
+.family dt {{ color: var(--ink-2); }}
+.family dd {{ margin: 0; }}
+.family .who {{ margin-top: 0.6rem; font-size: 0.85rem; color: var(--ink-2); }}
 
 .spec {{ display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1.2rem; font-size: 0.98rem; }}
 .spec dt {{ color: var(--ink-2); }}
