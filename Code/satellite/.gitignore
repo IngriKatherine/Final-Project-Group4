@@ -1,0 +1,7 @@
+# downloaded imagery, labels and model checkpoints are large: keep them out of git
+data/
+runs/
+*.tar
+*.pt
+figures/quicklooks/
+__pycache__/

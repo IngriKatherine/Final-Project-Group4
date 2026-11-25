@@ -4,27 +4,55 @@ slide titles, headlines and speaker notes. The slide files only hold layout
 and charts, so you can rewrite the story without touching any code.
 """
 
-PROJECT_TITLE = "Forecasting crude oil with LSTM, GRU and SHAP feature selection"
+PROJECT_TITLE = "Forecasting crude oil prices, from price history to ships seen from space"
 COURSE = "Deep Learning and Fundamentals of AI, final project"
 GROUP = "Group 4"
 
-# TODO: replace with the real names before presenting.
-TEAM = ["[Name 1]", "[Name 2]", "[Name 3]"]
+TEAM = [
+    "Ingri Katherine Quevedo Rocha",
+    "Aditi Shukla",
+    "Aidan Carslisle",
+    "Constantine Zhang",
+]
 
-# Who owns which part (shown on the title slide and next to each slide's notes).
+# Who presents which part (shown next to each slide's speaker notes).
+# TODO: put the right name on each part.
 ROLES = {
-    "data": "[Name 1]",      # data pipeline and baselines
-    "model": "[Name 2]",     # LSTM / GRU modeling
-    "shap": "[Name 3]",      # SHAP analysis
+    "stats": "[ARIMA / ARIMAX owner]",          # random walk, ARIMA, ARIMAX
+    "rnn": "[LSTM / GRU owner]",                # recurrent networks
+    "image": "[image CNN owner]",               # price-chart images (Ren et al., 2024)
+    "satellite": "Ingri Katherine Quevedo Rocha",   # Strait of Hormuz satellite CNN and 2026 forecasts
 }
 
 # TODO: paste the GitHub URL once the repository is public.
 REPO_URL = "https://github.com/<owner>/Final-Project-Group4"
 
-RESEARCH_QUESTION = (
-    "Does SHAP-guided feature selection improve recurrent-network forecasts of "
-    "crude oil prices in cases where simply adding more features does not?"
+GOAL = (
+    "Forecast crude oil prices, and test whether information beyond the price history (market drivers, "
+    "price-chart images, and oil supply measured from satellite images of the Strait of Hormuz) "
+    "makes the forecasts better, including through the 2026 Hormuz shock."
 )
+
+# The four model families, in the order the talk introduces them.
+#   files: glob patterns under Code/ that show the family has results (status chip on slide 3)
+FAMILIES = [
+    dict(key="stats", name="Statistical baselines", models="Random walk, ARIMA, ARIMAX",
+         input="Price history (ARIMAX adds market drivers)",
+         output="Price h days ahead", color="#5F6B74",
+         files=["results/predictions/baseline_arima_h*.csv", "results/predictions/baseline_arimax_h*.csv"]),
+    dict(key="rnn", name="Recurrent networks", models="LSTM, GRU",
+         input="30-day windows of daily returns (price only, or with market drivers)",
+         output="Log return h days ahead", color="#2a78d6",
+         files=["results/predictions/lstm_*_h*_s*.csv", "results/predictions/gru_*_h*_s*.csv"]),
+    dict(key="image", name="Image CNN", models="CNN on price-chart images",
+         input="The recent price path drawn as a picture",
+         output="Direction of the next move (up / down)", color="#eda100",
+         files=["results/predictions/imgcnn_*_h*_s*.csv"]),
+    dict(key="satellite", name="Satellite CNN", models="Faster R-CNN ship detector + LSTM/GRU",
+         input="Sentinel-2 images of the Strait of Hormuz; ship counts calibrated with IMF PortWatch",
+         output="Oil-supply series, then the 2026 price forecast", color="#1baf7a",
+         files=["satellite/data/series/supply_by_scene.csv", "results/predictions_2026/*.csv"]),
+]
 
 # -----------------------------------------------------------------------------
 # The deck. Order here is the order of the presentation.
@@ -41,153 +69,156 @@ SLIDES = [
     dict(key="01_title", nav="Title", icon=":material/oil_barrel:", section="Story",
          headline=PROJECT_TITLE,
          lede="", speaker="all", minutes=0.3,
-         notes="Introduce the group and the one question we answer. Point at the WTI line: "
-               "20 years of a price that refuses to be predicted."),
+         notes="Introduce the four of us and the goal: forecast crude oil prices, and find out which kinds of "
+               "information help. Point at the WTI line: twenty years of a price that refuses to be predicted."),
     dict(key="02_motivation", nav="Why oil prices?", icon=":material/show_chart:", section="Story",
          headline="Oil prices behave almost like a random walk",
          lede="Daily returns carry almost no memory, so 'tomorrow equals today' is the forecast to beat.",
-         speaker="data", minutes=0.75,
-         notes="Use the range buttons to show 2008, 2014-16, April 2020 and 2022. Then the "
-               "autocorrelation bars: every lag sits inside the noise band. That is why the random "
-               "walk is a strong benchmark and why beating it is a real result."),
-    dict(key="03_question", nav="Two papers, one question", icon=":material/balance:", section="Story",
-         headline="Two papers disagree about adding more inputs",
-         lede="One found extra drivers useless, the other found SHAP-selected drivers decisive. We test both on crude oil.",
+         speaker="stats", minutes=0.75,
+         notes="Use the range buttons for 2008, 2014-16, April 2020 and 2022. Then the autocorrelation bars: "
+               "every lag sits inside the noise band. That is why the random walk is a strong benchmark and "
+               "why beating it is a real result."),
+    dict(key="03_approach", nav="Our approach", icon=":material/route:", section="Story",
+         headline="Four ways to forecast one price",
+         lede="Statistical models, recurrent networks, a CNN that reads price charts, and a CNN that counts "
+              "tankers in the Strait of Hormuz.",
          speaker="all", minutes=1.0,
-         notes="Paper 1: correlated assets did not help an LSTM forecast oil-company stocks. Paper 2: "
-               "SHAP selection helped an LSTM forecast marine gas oil. Our three input sets put both "
-               "ideas in one experiment. Read the three hypotheses."),
+         notes="One sentence per family, left to right: what it reads and what it predicts. Then the four "
+               "hypotheses; the verdicts fill in from the results files."),
     dict(key="04_data", nav="Data", icon=":material/database:", section="Data",
-         headline="Thirteen public series, twenty years, one chronological split",
-         lede="FRED and Yahoo Finance, aligned to business days from 2006 to 2025.",
-         speaker="data", minutes=1.0,
-         notes="Sources table first. Then Explore: switch to 'Indexed to 100' to compare series on "
-               "one axis. Correlations tab: daily returns of most drivers are only weakly related to WTI."),
+         headline="Thirteen market series, twenty years, one chronological split",
+         lede="FRED and Yahoo Finance, aligned to business days; the satellite data come later in the talk.",
+         speaker="stats", minutes=0.75,
+         notes="Sources table first. Then Explore: switch to 'Indexed to 100' to compare series on one axis. "
+               "Correlations tab: daily returns of most drivers are only weakly related to WTI, which is why "
+               "ARIMAX and the multi-input networks have a hard job."),
     dict(key="05_preprocessing", nav="Preprocessing", icon=":material/tune:", section="Data",
          headline="Every window only sees the past",
-         lede="Returns instead of levels, a clipped negative price, and splits assigned by target date.",
-         speaker="data", minutes=0.75,
-         notes="Pipeline diagram, then the April 2020 zoom: WTI settled below zero and we floor it at "
-               "$1 so log returns stay defined. Finish with the window demo: move the origin and show "
-               "which 30 days the network reads and which day it predicts."),
-    dict(key="06_baselines", nav="Baselines", icon=":material/flag:", section="Methods",
-         headline="ARIMA cannot reliably beat 'no change' either",
-         lede="The random walk and a rolling ARIMA set the bar on the same test origins the networks use.",
-         speaker="data", minutes=0.75,
-         notes="RMSE grows with the horizon for both. ARIMA is a hair better at 5 days and worse at 1 "
-               "day. The random walk predicts 'no change', so directional accuracy does not apply to it."),
-    dict(key="07_networks", nav="LSTM and GRU", icon=":material/hub:", section="Methods",
+         lede="Returns instead of levels, a repaired negative price, and splits assigned by target date.",
+         speaker="stats", minutes=0.6,
+         notes="Pipeline diagram, then the April 2020 zoom: WTI settled below zero for one day. Finish with "
+               "the window demo: move the origin and show which 30 days the network reads and which day it predicts."),
+    dict(key="06_baselines", nav="ARIMA and ARIMAX", icon=":material/flag:", section="Models",
+         headline="ARIMA and ARIMAX: can statistics beat 'no change'?",
+         lede="The random walk, a rolling ARIMA, and ARIMAX with market drivers, on the same test days as every network.",
+         speaker="stats", minutes=1.0,
+         notes="Equations first. ARIMAX adds the market drivers as regressors. RMSE grows with the horizon for "
+               "all of them; the question is whether any statistical model gets under the random walk."),
+    dict(key="07_networks", nav="LSTM and GRU", icon=":material/hub:", section="Models",
          headline="Gated recurrent networks decide what to remember",
          lede="A stacked LSTM or GRU reads a 30-day window and predicts one h-step log return.",
-         speaker="model", minutes=1.25,
-         notes="Equations for both cells, then our architecture. Use the parameter calculator to show "
-               "that the default LSTM with all 13 inputs has 53,569 weights. The cell playground shows "
-               "the forget gate at work."),
-    dict(key="08_training", nav="Training", icon=":material/model_training:", section="Methods",
+         speaker="rnn", minutes=1.0,
+         notes="Equations for both cells, then our architecture. The parameter calculator shows how quickly "
+               "weights grow with inputs. The cell playground shows the forget gate at work."),
+    dict(key="08_training", nav="Training", icon=":material/model_training:", section="Models",
          headline="Validation loss bottoms out within a few epochs",
          lede="Adam, early stopping and three seeds per configuration, trained on the AWS GPU.",
-         speaker="model", minutes=1.0,
-         notes="Training settings, then learning curves. Point out the best epoch marker: the network "
-               "finds what little signal there is quickly and then starts to overfit, so early "
-               "stopping does the heavy lifting."),
-    dict(key="09_shap", nav="SHAP", icon=":material/insights:", section="Methods",
-         headline="SHAP ranks the drivers the network actually uses",
-         lede="Expected-gradient SHAP on validation windows, averaged over lags, samples and seeds.",
-         speaker="shap", minutes=2.25,
-         notes="One line on Shapley values. Switch horizons: Brent and the energy ETF lead at 1 day, "
-               "the S&P 500 rises at 20 days. The lag heatmap shows the most recent days matter most. "
-               "Stability tab: how much the seeds agree."),
+         speaker="rnn", minutes=0.75,
+         notes="Training settings, then learning curves. The best-epoch marker shows the network finds what "
+               "little signal there is quickly and then starts to overfit, so early stopping does the heavy lifting."),
+    dict(key="09_images", nav="Price charts as images", icon=":material/image:", section="Models",
+         headline="Reading price charts like a trader: a CNN on images",
+         lede="Following Ren et al. (2024), each window of prices becomes a small chart image and a CNN "
+              "predicts whether the price goes up or down.",
+         speaker="image", minutes=1.25,
+         notes="Show the image builder: the same 20 days as a line and as a picture. The CNN never sees "
+               "numbers, only pixels. Then the examples of up and down charts, the architecture, and the "
+               "directional accuracy against a coin flip and against the LSTM/GRU."),
     dict(key="10_results", nav="Main results", icon=":material/leaderboard:", section="Results",
-         headline="Main result: price only vs. all features vs. SHAP-selected",
-         lede="Seed-averaged test forecasts for 2022 to 2025, compared on prices in USD per barrel.",
-         speaker="all", minutes=2.25,
-         notes="Skill vs. random walk is the headline number: below zero means the network loses to "
-               "'no change'. Then the significance tab: Diebold-Mariano tests against the baselines "
-               "and between feature sets."),
+         headline="Which model forecasts best, 2022 to 2025?",
+         lede="Seed-averaged test forecasts, compared on prices in USD per barrel against the random walk.",
+         speaker="rnn", minutes=1.5,
+         notes="Skill vs. random walk is the headline number: below zero means the model loses to 'no change'. "
+               "Then the significance tab: Diebold-Mariano tests against the baselines and between input sets."),
     dict(key="11_ablations", nav="Ablations", icon=":material/science:", section="Results",
          headline="How much do depth, width, lookback and dropout matter?",
          lede="One setting changes at a time; settings are judged on validation error only.",
-         speaker="model", minutes=1.0,
-         notes="Pick each parameter in turn. Validation RMSE picks the setting; test RMSE is shown "
-               "for information only."),
+         speaker="rnn", minutes=0.6,
+         notes="Pick each setting in turn. Validation RMSE picks the setting; test RMSE is shown for information only."),
     dict(key="12_forecasts", nav="Forecast explorer", icon=":material/timeline:", section="Results",
          headline="Where the forecasts go wrong",
          lede="Actual vs. predicted prices over the test period, with rolling error to show when models struggle.",
-         speaker="all", minutes=0.75,
-         notes="Zoom into the 2022 spike with the period buttons. The rolling RMSE chart shows every "
-               "model failing at the same time: the errors come from shocks no input anticipated."),
-    dict(key="13_lab", nav="Model lab", icon=":material/experiment:", section="Results",
+         speaker="all", minutes=0.6,
+         notes="Zoom into the 2022 spike. The rolling RMSE chart shows every model failing at the same time: the "
+               "errors come from shocks that no price-based input anticipated. That motivates the satellite data."),
+    dict(key="13_satellite", nav="Ships from space", icon=":material/satellite_alt:", section="2026 and Hormuz",
+         headline="Counting tankers in the Strait of Hormuz from space",
+         lede="A CNN finds ships in Sentinel-2 images; IMF PortWatch transit data provide the labels that turn "
+              "ship counts into an oil-supply series.",
+         speaker="satellite", minutes=1.75,
+         notes="Why Hormuz: about a fifth of the world's oil, effectively closed after 28 February 2026, and many "
+               "tankers crossed with their AIS transponders off. Pipeline left to right. Show one image with the "
+               "detections, the detector's accuracy, then the supply series against PortWatch."),
+    dict(key="14_forecast2026", nav="2026 forecast", icon=":material/query_stats:", section="2026 and Hormuz",
+         headline="Forecasting 2026 with oil supply measured from space",
+         lede="The networks read the price history plus the satellite supply series; 2026 is held out as the test year.",
+         speaker="satellite", minutes=1.5,
+         notes="First the chart: price and satellite supply in 2026. Then the table: price only vs. price + AIS "
+               "supply vs. price + satellite supply, all on the same 2026 days. If the satellite series beats "
+               "AIS, the images carried information that ship tracking did not."),
+    dict(key="15_conclusions", nav="Conclusions", icon=":material/task_alt:", section="Wrap-up",
+         headline="What we can say, and what we cannot",
+         lede="The verdict on each hypothesis, the limits of our test periods, and what comes next.",
+         speaker="all", minutes=0.9,
+         notes="Read the verdict on each hypothesis, two limitations, two next steps, then open for questions."),
+    dict(key="16_lab", nav="Model lab (backup)", icon=":material/experiment:", section="Appendix",
          headline="Ask the trained network a what-if question",
          lede="Load a saved checkpoint, pick a day, shock one input, and watch the forecast move.",
-         speaker="shap", minutes=0.75,
-         notes="Live inference with the saved LSTM. Show the input heatmap (what the network sees), "
-               "then the sensitivity chart: a 2-sigma move in each input over the last 5 days. It should "
-               "roughly agree with the SHAP ranking."),
-    dict(key="14_conclusions", nav="Conclusions", icon=":material/task_alt:", section="Wrap-up",
-         headline="What we can say, and what we cannot",
-         lede="Our answer to the research question, the limits of one test period, and what comes next.",
-         speaker="all", minutes=1.0,
-         notes="Read the verdict on each hypothesis, two limitations, two next steps, then open for questions."),
+         speaker="rnn", minutes=0,
+         notes="Backup for questions: live inference with a saved LSTM or GRU checkpoint."),
 ]
 
-SECTIONS = ["Story", "Data", "Methods", "Results", "Wrap-up"]
+SECTIONS = ["Story", "Data", "Models", "Results", "2026 and Hormuz", "Wrap-up", "Appendix"]
 
 # -----------------------------------------------------------------------------
-# Papers and references
+# Hypotheses (verdicts are computed in loaders.verdicts from the results files)
 # -----------------------------------------------------------------------------
-PAPERS = [
-    dict(
-        short="Firouzjaee & Khalilian (2022)",
-        title="The interpretability of LSTM models for predicting oil company stocks: impact of correlated features",
-        venue="arXiv:2201.00350",
-        url="https://arxiv.org/html/2201.00350v5",
-        target="Oil-company stock prices",
-        method="LSTM, with crude oil, gold and the US dollar added as inputs",
-        finding="The extra correlated inputs mostly did not improve the forecasts.",
-        lesson="More features is not the same as more information.",
-    ),
-    dict(
-        short="Okasha & Zaher (2026)",
-        title="An explainable deep learning framework for marine gas oil price forecasting: "
-              "integrating LSTM with SHAP-based feature importance",
-        venue="Journal of Shipping and Trade, 11, 15",
-        url="https://doi.org/10.1186/s41072-026-00237-3",
-        target="Marine gas oil price, 8 weeks ahead",
-        method="LSTM on the drivers ranked highest by SHAP",
-        finding="Beat ARIMA, ARIMAX and an LSTM without feature selection.",
-        lesson="Choosing the right few features can matter more than adding all of them.",
-    ),
-]
-
 HYPOTHESES = [
-    dict(key="H1", text="An LSTM or GRU that sees only the oil price does not beat the random walk at a 1-day horizon."),
-    dict(key="H2", text="Adding every candidate driver does not reliably improve on the price-only network (as in paper 1)."),
-    dict(key="H3", text="SHAP-selected drivers improve on both the price-only and the all-features network (as in paper 2)."),
+    dict(key="H1", text="No model beats the random walk on price error 1 day ahead (2022 to 2025)."),
+    dict(key="H2", text="ARIMAX, which adds market drivers, is no more accurate than ARIMA."),
+    dict(key="H3", text="A CNN reading price-chart images calls the direction of the move better than a coin flip."),
+    dict(key="H4", text="In 2026, adding the satellite oil-supply series lowers forecast error compared with price only."),
 ]
+
+# The image-CNN design shown on slide 9. Edit to match the implementation.
+IMAGE_CNN = dict(
+    window=20,                  # days drawn in one image
+    size=(64, 64),              # image height x width in pixels
+    layers=[
+        "Conv 5x3, 64 filters, batch norm, LeakyReLU, max-pool 2x1",
+        "Conv 5x3, 128 filters, batch norm, LeakyReLU, max-pool 2x1",
+        "Conv 5x3, 256 filters, batch norm, LeakyReLU, max-pool 2x1",
+        "Dropout 0.5, fully connected, softmax over {down, up}",
+    ],
+    loss="Cross-entropy on the sign of the h-day return",
+)
 
 REFERENCES = [
-    "Firouzjaee, J. T., & Khalilian, P. (2022). The interpretability of LSTM models for predicting oil company stocks: "
-    "impact of correlated features. arXiv:2201.00350.",
-    "Okasha, S. H., & Zaher, H. (2026). An explainable deep learning framework for marine gas oil price forecasting: "
-    "integrating LSTM with SHAP-based feature importance. Journal of Shipping and Trade, 11, 15.",
+    "Ren, X., Jiang, W., Ji, Q., & Zhai, P. (2024). Seeing is believing: Forecasting crude oil price trend from the "
+    "perspective of images. Journal of Forecasting, 43(7), 2809-2821. https://doi.org/10.1002/for.3149",
+    "Box, G. E. P., Jenkins, G. M., Reinsel, G. C., & Ljung, G. M. (2015). Time Series Analysis: Forecasting and Control (5th ed.). Wiley.",
     "Hochreiter, S., & Schmidhuber, J. (1997). Long short-term memory. Neural Computation, 9(8).",
     "Cho, K., et al. (2014). Learning phrase representations using RNN encoder-decoder for statistical machine translation. EMNLP.",
-    "Lundberg, S. M., & Lee, S.-I. (2017). A unified approach to interpreting model predictions. NeurIPS.",
+    "Ren, S., He, K., Girshick, R., & Sun, J. (2015). Faster R-CNN: Towards real-time object detection with region proposal networks. NeurIPS.",
+    "Beukema, P., et al. (2023). Satellite imagery and AI: A new era in ocean conservation, from research to deployment "
+    "and impact (Ai2 Sentinel-2 vessel dataset). arXiv:2312.03207.",
+    "IMF PortWatch (2026). Daily chokepoint transit calls and trade volume estimates. https://portwatch.imf.org",
     "Diebold, F. X., & Mariano, R. S. (1995). Comparing predictive accuracy. Journal of Business & Economic Statistics, 13(3).",
-    "Data: Federal Reserve Bank of St. Louis (FRED); Yahoo Finance via yfinance.",
+    "Data: FRED (Federal Reserve Bank of St. Louis); Yahoo Finance via yfinance; Copernicus Sentinel-2 L2A via the AWS "
+    "Registry of Open Data (Earth Search).",
     "App structure follows the course's Streamlit examples (Data-Visualization/streamlit, A. Jafari).",
 ]
 
 LIMITATIONS = [
-    "One commodity and one test period (2022 to 2025), which opens with an unusual war-driven price spike.",
-    "Daily data: paper 2 worked with weekly prices 8 weeks ahead, where slower drivers have more room to matter.",
-    "SHAP on correlated inputs (two dollar indices, two yields, WTI and Brent) splits credit between near-duplicates.",
-    "Models are trained once; a rolling re-training scheme would adapt to new regimes.",
+    "Two test periods (2022 to 2025, and 2026) that both open with war-driven price spikes.",
+    "Sentinel-2 is optical and daytime only: cloudy and dusty dates are dropped, so the supply series has gaps.",
+    "At 10 m a tanker cannot be told from a container ship by shape; ship length is the proxy for oil capacity.",
+    "The satellite series starts in 2023, so the 2026 models train on about three years of weekly data.",
 ]
 
 FUTURE_WORK = [
-    "Weekly frequency and longer horizons, to match paper 2's setting.",
-    "Attention or Transformer encoders, and a multi-horizon output head.",
-    "Rolling-origin re-training and SHAP over time: does the dollar matter more in 2022 than in 2019?",
-    "News and sentiment features, and grouped SHAP for correlated inputs.",
+    "Sentinel-1 radar (through NASA's ASF archive) to see through cloud and at night.",
+    "More chokepoints and export terminals (Bab el-Mandeb, Ras Tanura, Kharg Island) as extra supply series.",
+    "Attention or Transformer encoders that read chart images and supply series together.",
+    "Rolling re-training through 2026, so the models adapt as the strait reopens.",
 ]

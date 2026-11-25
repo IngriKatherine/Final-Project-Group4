@@ -1,0 +1,116 @@
+# =============================================================================
+# Satellite track: Strait of Hormuz ship traffic -> "supply of oil" series
+# Every script in Code/satellite/ reads this file. Paths are relative to
+# Code/satellite/ (the folder that holds this file).
+# =============================================================================
+
+paths:
+  scenes_jsonl: data/stac/scenes.jsonl        # s01: STAC items found
+  scenes_csv: data/stac/scenes.csv            # s01: one row per item
+  scene_dir: data/scenes                      # s02: one 5-band GeoTIFF per date
+  scene_index: data/scenes/scene_index.csv    # s02: coverage stats per date
+  ai2_raw: data/ai2_sentinel2_vessels         # AI2 tar extracted here (s03)
+  labels_dir: data/labels                     # s03: YOLO chips {source}/{split}/images|labels
+  hormuz_export: data/hormuz_to_label         # s03b: chips to hand-label
+  gfw_csv: data/gfw/sentinel2_detections.csv  # optional external detections (s03 gfw)
+  runs_dir: runs                              # s04: checkpoints + metrics
+  detections_csv: data/detections/detections.csv   # s05
+  coverage_csv: data/detections/coverage.csv       # s05
+  series_dir: data/series                     # s06/s07 outputs
+  figures_dir: figures
+  sentinel1_dir: data/sentinel1               # s01b (optional, NASA ASF)
+
+# Area of interest: the Strait of Hormuz narrows, both the recognised Omani
+# traffic-separation scheme and the 2026 "Iranian route" near Larak Island.
+aoi:
+  bbox: [56.00, 26.15, 57.00, 27.00]   # lon_min, lat_min, lon_max, lat_max (WGS84)
+  crs: "EPSG:32640"                    # UTM zone 40N, metres
+  resolution: 10                       # metres per pixel (Sentinel-2 10 m bands)
+
+# Zones are APPROXIMATE starting polygons (lon, lat). Open one downloaded scene
+# in QGIS or geojson.io, check where ships actually sail and anchor, and edit.
+# type: transit -> counted as oil moving through the strait
+# type: anchorage -> counted as oil waiting (stuck supply)
+zones:
+  omani_tss:
+    type: transit
+    polygon: [[56.05, 26.45], [56.30, 26.52], [56.55, 26.48], [56.85, 26.22],
+              [56.98, 26.30], [56.85, 26.45], [56.55, 26.64], [56.30, 26.64],
+              [56.05, 26.57]]
+  iranian_route:
+    type: transit
+    polygon: [[56.05, 26.66], [56.30, 26.70], [56.50, 26.70], [56.85, 26.58],
+              [56.88, 26.68], [56.50, 26.80], [56.30, 26.80], [56.05, 26.76]]
+  larak_qeshm_anchorage:
+    type: anchorage
+    polygon: [[56.20, 26.80], [56.55, 26.80], [56.55, 26.98], [56.20, 26.98]]
+
+dates:
+  start: "2023-01-01"     # gives 2023-2025 to calibrate and train on, 2026 to test
+  end: "2026-11-24"
+
+# Sentinel-2 L2A Cloud-Optimized GeoTIFFs on AWS Open Data (no account needed).
+stac:
+  url: "https://earth-search.aws.element84.com/v1"
+  collection: "sentinel-2-c1-l2a"  # Collection 1 (ESA's current reprocessing). If s01 warns that
+                                   # the newest image is old, try "sentinel-2-l2a"
+  max_cloud: 60                    # tile-level %; per-zone cloud masking happens later
+  assets: {red: red, green: green, blue: blue, nir: nir, scl: scl}   # tried first; known aliases (B04...) are tried after
+
+image:
+  scale_max_reflectance: 0.25      # reflectance mapped to 255 in the uint8 chips
+  workers: 2                       # parallel dates in s02 (~1.5 GB RAM each)
+
+labels:
+  tile: 512                        # chip size in pixels
+  ai2_box_px: 20                   # AI2 labels are points -> square box of this size
+  val_fraction: 0.15
+  hormuz_export_n: 300             # chips to hand-label
+  hormuz_split_date: "2026-02-28"  # stratify export before / after the closure
+
+detector:
+  backbone: coco                   # coco | imagenet | ssl4eo | scratch
+  min_size: 800                    # 512 chips are upsampled to 800 px (helps small ships)
+  max_size: 1333
+  anchor_sizes: [16, 32, 64, 128, 256]
+  epochs: 12
+  batch_size: 8
+  max_val_chips: 2000              # validation subset scored every epoch (the full val set is slow)
+  optimizer: sgd                   # sgd | adamw
+  lr: 0.01                         # adamw: use 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 4
+  match_distance_px: 10            # a detection is correct if its centre is within 10 px (100 m)
+  score_threshold: 0.5
+  seed: 0
+
+inference:
+  tile: 512
+  stride: 448
+  min_score: 0.5
+  nms_iou: 0.3
+  ndwi_min: 0.0                    # detection centre must be water (NDWI > this)
+
+measure:
+  crop: 64                         # pixels around each detection used to measure the hull
+  k_mad: 4.0                       # brightness threshold = water median + k * MAD
+
+supply:
+  small_m: 60                      # below this: boats, IRGC craft, dhows -> ignored
+  large_m: 150                     # at or above this: counted as an oil-carrying size vessel
+  min_coverage: 0.6                # drop a zone on a date if < 60% of its usual water is visible
+  dwt_ref_length_m: 330            # a VLCC: ~330 m long ...
+  dwt_ref_tonnes: 300000           # ... carries ~300,000 t deadweight
+  dwt_exponent: 3.3                # DWT ~ length^3.3 (fits Aframax/Suezmax/VLCC roughly)
+  barrels_per_tonne: 7.33          # crude-oil convention
+  fallback_k_per_day: 6.6          # snapshot -> flow if calibration has too few weeks:
+                                   # 24 h x 12 knots (22 km/h) / ~80 km corridor
+
+portwatch:
+  url: "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query"
+  name_contains: "Hormuz"
+  calibration_end: "2025-12-31"    # fit satellite -> AIS mapping only on pre-2026 data
+
+export:
+  levels_csv: "../data/processed/levels.csv"     # written by the group pipeline (02_preprocess.py)
+  out_csv: "../data/processed/satellite_features.csv"

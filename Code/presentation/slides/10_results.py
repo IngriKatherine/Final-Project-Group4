@@ -23,7 +23,7 @@ if comp.empty:
 
 hs = sorted(comp.horizon.unique())
 expected = set(itertools.product(e["models"], e["feature_sets"], cfg["framing"]["horizons"]))
-have = {(r.model, r.features, r.horizon) for r in comp.itertuples() if r.model in ("lstm", "gru")}
+have = {(r.model, r.features, r.horizon) for r in comp.itertuples() if r.model not in L.BASELINES}
 missing = sorted(expected - have)
 
 # --- Best model per horizon ------------------------------------------------------------------
@@ -57,7 +57,7 @@ with t_chart:
     for j, h in enumerate(hs, 1):
         d = comp[comp.horizon == h]
         if not show_base:
-            d = d[~d.model.isin(["rw", "arima"])]
+            d = d[~d.model.isin(L.BASELINES)]
         d = d.dropna(subset=[metric])
         for r in d.itertuples():
             err = None
@@ -90,17 +90,17 @@ with t_chart:
     for a in fig.layout.annotations[:len(hs)]:
         a.update(font=dict(size=13, color=theme.INK), x=a.x, xanchor="center")
     theme.show(fig, height=440)
-    st.caption("Colour is the input set (blue: price only, orange: all features, green: SHAP-selected); "
-               "hatching marks GRU, solid LSTM; grey bars are the baselines. Forecasts are averaged over seeds; "
-               "whiskers on RMSE show the spread of single-seed runs.")
+    st.caption("Colour is the input set (blue: price only, orange: price + market drivers, purple: selected "
+               "drivers); hatching marks GRU, solid LSTM; yellow is the image CNN; grey bars are the statistical "
+               "models. Forecasts are averaged over seeds; whiskers on RMSE show the spread of single-seed runs.")
 
-    rnn = comp[comp.model.isin(["lstm", "gru"])]
+    rnn = comp[~comp.model.isin(L.BASELINES)]
     if not rnn.empty:
         bestrnn = rnn.loc[rnn.groupby("horizon")["Skill"].idxmax()]
         words = []
         for b in bestrnn.itertuples():
             verb = "beats" if b.Skill > 0 else "trails"
-            words.append(f"at {b.horizon} day{'s' if b.horizon > 1 else ''} the best network ({b.config}) {verb} "
+            words.append(f"at {b.horizon} day{'s' if b.horizon > 1 else ''} the best model ({b.config}) {verb} "
                          f"the random walk by {abs(b.Skill):.1f}%")
         theme.callout("So far, " + "; ".join(words) + ".")
 
@@ -129,7 +129,7 @@ with t_table:
 with t_dm:
     dm = L.dm_tests()
     if dm.empty:
-        st.info("No network forecasts to test yet.")
+        st.info("No model forecasts to test yet.")
     else:
         alpha = st.select_slider("Significance level", [0.01, 0.05, 0.10], value=0.05)
         st.write("Diebold-Mariano test on squared errors, with the Harvey-Leybourne-Newbold small-sample "
@@ -142,9 +142,9 @@ with t_dm:
             return f"{r.model} more accurate" if r.DM < 0 else f"{r.vs} more accurate"
 
         dm = dm.assign(Result=dm.apply(reading, axis=1))
-        for kind in ("vs. baseline", "between feature sets"):
+        for kind in ("vs. baseline", "between input sets"):
             d = dm[dm.comparison == kind]
-            st.markdown(f"**{'Against the baselines' if kind == 'vs. baseline' else 'Between input sets (the research question)'}**")
+            st.markdown(f"**{'Against the statistical models' if kind == 'vs. baseline' else 'Extra inputs vs. price only, same network'}**")
             if d.empty:
                 st.caption("Needs at least two input sets for the same network and horizon.")
                 continue

@@ -4,10 +4,11 @@ Final presentation of Group 4's project as an interactive Streamlit website.
     cd Code
     streamlit run presentation/app.py
 
-Fourteen slides in five sections, built from the files the pipeline scripts write
-(data/processed, results/tables, results/predictions, results/shap, results/models).
-Nothing is typed in by hand, so re-running 06_run_experiments.py or 07_ablations.py
-updates the slides: press "Reload data" in the sidebar.
+Fifteen slides plus a backup, built from the files the pipeline scripts write
+(data/processed, results/tables, results/predictions, results/predictions_2026, results/models,
+and the satellite track in satellite/data, satellite/runs, satellite/figures).
+Nothing is typed in by hand, so re-running a pipeline script updates the slides:
+press "Reload data" in the sidebar.
 
 Structure (same idea as the course apps: the page is separate from the work)
     app.py       navigation, sidebar, presenter tools        <- this file
@@ -55,7 +56,7 @@ current = st.navigation(nav, position="sidebar", expanded=True)
 def presenter_timer():
     """Re-runs on its own every second; the rest of the page is left alone (see the course's fragment lesson)."""
     start = st.session_state.get("timer_start")
-    budget = sum(s["minutes"] for s in content.SLIDES)
+    budget = sum(s["minutes"] for s in content.SLIDES if s["section"] != "Appendix")
     if start is None:
         st.caption(f"Talk budget: 12 to 15 min (slides add up to {budget:.0f} min)")
         return
@@ -82,7 +83,7 @@ with st.sidebar:
                  help="Clear the cache after the pipeline scripts have written new results."):
         loaders.clear_all_caches()
         st.rerun()
-    st.caption("Reads `Code/data` and `Code/results`. Run on its own with  \n"
+    st.caption("Reads `Code/data`, `Code/results` and `Code/satellite`. Run with  \n"
                "`streamlit run presentation/app.py` from `Code/`.")
 
 current.run()

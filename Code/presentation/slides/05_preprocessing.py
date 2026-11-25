@@ -27,7 +27,7 @@ with left:
       edge [color="{theme.MUTED}", arrowsize=0.6];
       a [label="FRED (7 series)  +  Yahoo Finance (6 tickers)"];
       b [label="Align to business days, forward-fill gaps of 5 days or less"];
-      c [label="Floor WTI at $1 on 20 April 2020", fillcolor="{theme.CRUDE_SOFT}"];
+      c [label="{L.negative_price_step()}", fillcolor="{theme.CRUDE_SOFT}"];
       d [label="Keep the period where all 13 series exist: 2006 to 2025"];
       e [label="Log returns for prices, first differences for rates"];
       f [label="Standardise with means and std. from training rows only", fillcolor="{theme.CRUDE_SOFT}"];
@@ -47,7 +47,7 @@ with right:
         fig.add_trace(go.Scatter(x=raw.index, y=raw, name="Raw FRED price", mode="lines+markers",
                                  line=dict(color=theme.MUTED, width=1.5), marker=dict(size=5),
                                  hovertemplate="%{x|%d %b}: $%{y:.2f}<extra>raw</extra>"))
-        fig.add_trace(go.Scatter(x=clean.index, y=clean, name="After floor at $1", mode="lines",
+        fig.add_trace(go.Scatter(x=clean.index, y=clean, name="After cleaning", mode="lines",
                                  line=dict(color=theme.BLUE, width=2),
                                  hovertemplate="%{x|%d %b}: $%{y:.2f}<extra>cleaned</extra>"))
         low = raw.idxmin()
@@ -57,10 +57,16 @@ with right:
         fig.update_layout(yaxis_title="USD per barrel", hovermode="x unified")
         theme.show(fig, height=300)
     r = ret["WTI"]
-    st.write(f"A log return needs a positive price. Flooring at ${cfg['data']['min_price']:.0f} keeps the series "
-             f"usable but creates two extreme daily log returns: **{r.loc['2020-04-20']:+.2f}** and "
-             f"**{r.loc['2020-04-21']:+.2f}**, where a typical day is about {r.abs().median():.2f}. Both fall in the validation period, so they influence early "
-             "stopping and the SHAP background, but not the test score.")
+    pol = cfg["data"].get("negative_price_policy", "clip")
+    worst = r.loc["2020-04-01":"2020-05-31"].abs().max()
+    if pol == "clip":
+        why = (f"A log return needs a positive price. Flooring at ${cfg['data']['min_price']:.0f} keeps the series "
+               f"usable but creates extreme daily log returns around 20 April (largest: {worst:.2f}).")
+    else:
+        why = ("A log return needs a positive price. Replacing the one negative day with a time interpolation of "
+               f"its neighbours keeps the series usable without inventing a crash: the largest daily log return in "
+               f"April-May 2020 is now {worst:.2f}, where a typical day is about {r.abs().median():.2f}.")
+    st.write(why + " The day falls in the validation period, so it affects early stopping but not the test score.")
 
 st.subheader("What one training example looks like")
 st.write("Pick a forecast origin. The network reads the shaded window of daily changes for every input and "

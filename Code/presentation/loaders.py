@@ -58,8 +58,14 @@ FEATURE_UNITS = {
     "FEDFUNDS": "%", "BREAKEVEN10Y": "%", "DXY": "index", "GOLD": "USD/oz", "SP500": "index",
     "VIX": "index", "NATGAS": "USD/MMBtu", "XLE": "USD",
 }
-FEATURE_SET_LABELS = {"price_only": "Price only", "all": "All features", "shap_selected": "SHAP-selected"}
-MODEL_LABELS = {"lstm": "LSTM", "gru": "GRU", "rw": "Random walk", "arima": "ARIMA"}
+FEATURE_SET_LABELS = {"price_only": "Price only", "all": "Price + market drivers", "shap_selected": "Selected drivers",
+                      "ais": "Price + AIS supply", "satellite": "Price + satellite supply",
+                      "satellite_ais": "Price + satellite + AIS"}
+MODEL_LABELS = {"lstm": "LSTM", "gru": "GRU", "rw": "Random walk", "arima": "ARIMA", "arimax": "ARIMAX",
+                "imgcnn": "Image CNN", "cnn": "CNN"}
+BASELINES = ("rw", "arima", "arimax")              # statistical models (no seeds)
+MODEL_ORDER = {"rw": 0, "arima": 1, "arimax": 2, "lstm": 3, "gru": 4, "imgcnn": 5, "cnn": 6}
+FEATURE_ORDER = {"price_only": 0, "all": 1, "shap_selected": 2, "ais": 3, "satellite": 4, "satellite_ais": 5}
 METRIC_HELP = {
     "RMSE": "Root mean squared error in USD/bbl. Penalises big misses.",
     "MAE": "Mean absolute error in USD/bbl.",
@@ -68,8 +74,12 @@ METRIC_HELP = {
     "Skill": "1 - RMSE / RMSE of the random walk, in %. Above 0 means better than 'no change'.",
 }
 
-RUN_RE = re.compile(r"^(lstm|gru)_(price_only|all|shap_selected)_h(\d+)_s(\d+)$")
-BASE_RE = re.compile(r"^baseline_(rw|arima)_h(\d+)$")
+# <model>_<input set>_h<h>_s<seed>, e.g. lstm_price_only_h5_s0 or imgcnn_price_only_h5_s1.
+# The model name has no underscore; ablation files (..._abl-...) do not match on purpose.
+RUN_RE = re.compile(r"^([a-z][a-z0-9]*)_([a-z][a-z_]*?)_h(\d+)_s(\d+)$")
+BASE_RE = re.compile(r"^baseline_(rw|arima|arimax)_h(\d+)$")
+PRED_2026_DIR = RESULTS / "predictions_2026"
+SAT_DIR = CODE_DIR / "satellite"
 
 
 def label(col: str) -> str:
@@ -77,7 +87,7 @@ def label(col: str) -> str:
 
 
 def config_label(model: str, features: str) -> str:
-    if model in ("rw", "arima"):
+    if model in BASELINES:
         return MODEL_LABELS[model]
     return f"{MODEL_LABELS.get(model, model.upper())} / {FEATURE_SET_LABELS.get(features, features)}"
 
@@ -228,7 +238,7 @@ def catalog() -> pd.DataFrame:
             continue
         m = BASE_RE.match(f.stem)
         if m:
-            rows.append({"kind": "baseline", "model": m[1], "features": "price_only",
+            rows.append({"kind": "baseline", "model": m[1], "features": "all" if m[1] == "arimax" else "price_only",
                          "horizon": int(m[2]), "seed": -1, "stem": f.stem})
     return pd.DataFrame(rows, columns=["kind", "model", "features", "horizon", "seed", "stem"])
 
@@ -244,10 +254,8 @@ def configs(horizon: int | None = None) -> list[tuple[str, str]]:
     c = catalog()
     if horizon is not None:
         c = c[c["horizon"] == horizon]
-    order_m = {"rw": 0, "arima": 1, "lstm": 2, "gru": 3}
-    order_f = {"price_only": 0, "all": 1, "shap_selected": 2}
     pairs = {(r.model, r.features) for r in c.itertuples()}
-    return sorted(pairs, key=lambda p: (order_m.get(p[0], 9), order_f.get(p[1], 9)))
+    return sorted(pairs, key=lambda p: (MODEL_ORDER.get(p[0], 9), FEATURE_ORDER.get(p[1], 9), p))
 
 
 @st.cache_data
@@ -285,7 +293,7 @@ def comparison() -> pd.DataFrame:
                 rw_rmse = m["RMSE"]
             row = {"horizon": h, "model": model, "features": feats, "config": config_label(model, feats),
                    "n_seeds": int(p["n_seeds"].iloc[0]), **m}
-            if model in ("lstm", "gru") and not mr.empty:
+            if model not in BASELINES and not mr.empty:
                 s = mr[(mr.model == model) & (mr.features == feats) & (mr.horizon == h)]["test_RMSE"]
                 row["RMSE_seed_mean"] = s.mean()
                 row["RMSE_seed_std"] = s.std() if len(s) > 1 else np.nan
@@ -316,95 +324,267 @@ def dm_tests() -> pd.DataFrame:
                      "DM": r["DM"], "p_value": r["p_value"], "n": len(j)})
 
     for h in horizons():
-        rnn = [c for c in configs(h) if c[0] in ("lstm", "gru")]
-        for c in rnn:
-            test(h, c, ("rw", "price_only"), "vs. baseline")
-            test(h, c, ("arima", "price_only"), "vs. baseline")
-        for model in ("lstm", "gru"):
-            for a, b in (("all", "price_only"), ("shap_selected", "all"), ("shap_selected", "price_only")):
-                if (model, a) in rnn and (model, b) in rnn:
-                    test(h, (model, a), (model, b), "between feature sets")
+        cf = configs(h)
+        nets = [c for c in cf if c[0] not in BASELINES]
+        bases = [c for c in cf if c[0] in BASELINES]
+        for c in nets:
+            for b in bases:
+                test(h, c, b, "vs. baseline")
+        if ("arimax", "all") in cf and ("arima", "price_only") in cf:
+            test(h, ("arimax", "all"), ("arima", "price_only"), "vs. baseline")
+        for model in sorted({m for m, _ in nets}):
+            feats = [f for m, f in nets if m == model]
+            for a in feats:
+                if a != "price_only" and "price_only" in feats:
+                    test(h, (model, a), (model, "price_only"), "between input sets")
     return pd.DataFrame(rows)
 
 
 def verdicts(alpha: float = 0.05) -> dict[str, tuple[str, str, str]]:
-    """Judge H1-H3 from whatever results exist. Returns {key: (kind, label, explanation)}
-    with kind in {"yes", "no", "mixed", "pending"} (yes = hypothesis supported)."""
+    """Judge H1-H4 (content.HYPOTHESES) from whatever results exist.
+    Returns {key: (kind, label, explanation)} with kind in {"yes", "no", "mixed", "pending"} (yes = supported)."""
+    from scipy import stats
+
     comp, dm = comparison(), dm_tests()
     out = {}
 
-    def rmse(model, feats, h):
-        r = comp[(comp.model == model) & (comp.features == feats) & (comp.horizon == h)]
-        return None if r.empty else float(r.RMSE.iloc[0])
-
-    def dm_row(model_a, feats_a, model_b, feats_b, h):
-        if dm.empty:
-            return None
-        r = dm[(dm.horizon == h) & (dm.model == config_label(model_a, feats_a)) &
-               (dm.vs == config_label(model_b, feats_b))]
-        return None if r.empty else r.iloc[0]
-
-    # H1: price-only network vs. random walk at h = 1
-    beat, checked = [], []
-    for model in ("lstm", "gru"):
-        r = dm_row(model, "price_only", "rw", "price_only", 1)
-        if r is not None:
-            checked.append(MODEL_LABELS[model])
-            if r.DM < 0 and r.p_value < alpha:
-                beat.append(MODEL_LABELS[model])
-    if not checked:
-        out["H1"] = ("pending", "Pending", "Needs the price-only runs from 06_run_experiments.py.")
-    elif beat:
-        out["H1"] = ("no", "Not supported", f"{' and '.join(beat)} with price only beat the random walk at 1 day.")
+    # H1: nothing beats the random walk at h = 1
+    d1 = dm[(dm.horizon == 1) & (dm.vs == "Random walk")] if not dm.empty else dm
+    if d1 is None or d1.empty:
+        out["H1"] = ("pending", "Pending", "Needs 1-day forecasts and the random walk (03_baselines.py, 06_run_experiments.py).")
     else:
-        out["H1"] = ("yes", "Supported", f"No price-only network ({', '.join(checked)}) significantly beats "
-                                         f"the random walk at 1 day.")
+        beat = d1[(d1.DM < 0) & (d1.p_value < alpha)]
+        if beat.empty:
+            out["H1"] = ("yes", "Supported", f"None of the {len(d1)} models significantly beats the random walk at 1 day.")
+        else:
+            out["H1"] = ("no", "Not supported", "Significantly better than the random walk at 1 day: "
+                         + ", ".join(beat.model.tolist()) + ".")
 
-    # H2: all features vs. price only
-    better, pairs = 0, 0
-    for model in ("lstm", "gru"):
-        for h in horizons():
-            r = dm_row(model, "all", model, "price_only", h)
-            if r is not None:
+    # H2: ARIMAX no better than ARIMA
+    dd = dm[(dm.model == "ARIMAX") & (dm.vs == "ARIMA")] if not dm.empty else dm
+    if dd is None or dd.empty:
+        out["H2"] = ("pending", "Pending", "Needs ARIMAX forecasts: results/predictions/baseline_arimax_h<h>.csv.")
+    else:
+        better = dd[(dd.DM < 0) & (dd.p_value < alpha)]
+        out["H2"] = (("yes", "Supported", f"ARIMAX never significantly beats ARIMA ({len(dd)} horizons).") if better.empty else
+                     ("no", "Not supported", f"ARIMAX significantly beats ARIMA at h = {', '.join(map(str, better.horizon))}."))
+
+    # H3: image CNN direction better than a coin flip (binomial test on each horizon)
+    rows = []
+    for h in horizons():
+        for model, feats in configs(h):
+            if model not in ("imgcnn", "cnn"):
+                continue
+            p = forecasts(model, feats, h)
+            if p is None:
+                continue
+            step = p.iloc[::max(1, h)]                       # non-overlapping targets
+            hit = np.sign(step.pred_price - step.base_price) == np.sign(step.true_price - step.base_price)
+            k, n = int(hit.sum()), int(len(hit))
+            rows.append((h, k / n, stats.binomtest(k, n, 0.5, alternative="greater").pvalue))
+    if not rows:
+        out["H3"] = ("pending", "Pending", "Needs image-CNN forecasts: results/predictions/imgcnn_price_only_h<h>_s<seed>.csv.")
+    else:
+        sig = [r for r in rows if r[2] < alpha]
+        txt = "; ".join(f"h = {h}: {a:.1%} (p = {p:.3f})" for h, a, p in rows)
+        out["H3"] = (("yes", "Supported", "Direction accuracy " + txt) if len(sig) == len(rows) else
+                     ("mixed", "Mixed", "Direction accuracy " + txt) if sig else
+                     ("no", "Not supported", "Direction accuracy " + txt))
+
+    # H4: 2026, satellite supply vs price only
+    c26 = comparison_2026()
+    if c26.empty or not {"price_only", "satellite"} <= set(c26.features):
+        out["H4"] = ("pending", "Pending", "Needs 2026 forecasts with and without the satellite series in "
+                                           "results/predictions_2026/.")
+    else:
+        wins, sig, pairs = 0, 0, 0
+        d26 = dm_tests_2026()
+        for (model, h), g in c26.groupby(["model", "horizon"]):
+            if {"price_only", "satellite"} <= set(g.features):
                 pairs += 1
-                better += int(r.DM < 0 and r.p_value < alpha)
-    if pairs == 0:
-        extra = ""
-        rw_losses = [h for h in horizons() if (a := rmse("lstm", "all", h)) and (b := rmse("rw", "price_only", h)) and a > b]
-        if rw_losses:
-            extra = f" So far: the all-features LSTM has a higher RMSE than the random walk at h = {', '.join(map(str, rw_losses))}."
-        out["H2"] = ("pending", "Pending", "Needs price-only runs to compare against." + extra)
-    elif better == 0:
-        out["H2"] = ("yes", "Supported", f"All features never significantly beat price only ({pairs} comparisons).")
-    elif better == pairs:
-        out["H2"] = ("no", "Not supported", f"All features beat price only in all {pairs} comparisons.")
-    else:
-        out["H2"] = ("mixed", "Mixed", f"All features beat price only in {better} of {pairs} comparisons.")
-
-    # H3: SHAP-selected vs. both other feature sets
-    wins, sig, pairs = 0, 0, 0
-    for model in ("lstm", "gru"):
-        for h in horizons():
-            s = rmse(model, "shap_selected", h)
-            for other in ("all", "price_only"):
-                o = rmse(model, other, h)
-                if s is None or o is None:
-                    continue
-                pairs += 1
-                wins += int(s < o)
-                r = dm_row(model, "shap_selected", model, other, h)
-                sig += int(r is not None and r.DM < 0 and r.p_value < alpha)
-    if pairs == 0:
-        out["H3"] = ("pending", "Pending", "Needs the SHAP-selected and price-only runs from 06_run_experiments.py.")
-    elif wins == pairs and sig > 0:
-        out["H3"] = ("yes", "Supported", f"SHAP-selected has the lower RMSE in all {pairs} comparisons, "
-                                         f"{sig} of them significant.")
-    elif wins > 0:
-        out["H3"] = ("mixed", "Mixed", f"SHAP-selected has the lower RMSE in {wins} of {pairs} comparisons "
-                                       f"({sig} significant).")
-    else:
-        out["H3"] = ("no", "Not supported", f"SHAP-selected never has the lower RMSE ({pairs} comparisons).")
+                a = float(g[g.features == "satellite"].RMSE.iloc[0])
+                b = float(g[g.features == "price_only"].RMSE.iloc[0])
+                wins += int(a < b)
+                r = d26[(d26.model == config_label(model, "satellite")) & (d26.vs == config_label(model, "price_only"))
+                        & (d26.horizon == h)] if not d26.empty else d26
+                sig += int(r is not None and not r.empty and r.DM.iloc[0] < 0 and r.p_value.iloc[0] < alpha)
+        kind = "yes" if wins == pairs and sig else "mixed" if wins else "no"
+        out["H4"] = (kind, {"yes": "Supported", "mixed": "Mixed", "no": "Not supported"}[kind],
+                     f"Satellite supply has the lower 2026 RMSE in {wins} of {pairs} comparisons ({sig} significant).")
     return out
+
+
+def negative_price_step() -> str:
+    """How the pipeline treats WTI's negative print, in words (follows config.yaml)."""
+    pol = config()["data"].get("negative_price_policy", "clip")
+    return {"clip": f"Floor WTI at ${config()['data'].get('min_price', 1):.0f} on 20 April 2020",
+            "interpolate": "Interpolate WTI's negative print on 20 April 2020",
+            "drop": "Drop 20 April 2020 (WTI below zero)",
+            "keep": "Keep WTI's negative print on 20 April 2020"}.get(pol, f"Negative price policy: {pol}")
+
+
+# -----------------------------------------------------------------------------
+# 2026 forecasts (results/predictions_2026/, same file names and columns as results/predictions/)
+# -----------------------------------------------------------------------------
+@st.cache_data
+def catalog_2026() -> pd.DataFrame:
+    rows = []
+    for f in sorted(PRED_2026_DIR.glob("*.csv")) if PRED_2026_DIR.exists() else []:
+        m = RUN_RE.match(f.stem)
+        if m:
+            rows.append({"model": m[1], "features": m[2], "horizon": int(m[3]), "seed": int(m[4]), "stem": f.stem})
+    return pd.DataFrame(rows, columns=["model", "features", "horizon", "seed", "stem"])
+
+
+@st.cache_data
+def forecasts_2026(model: str, features: str, horizon: int) -> pd.DataFrame | None:
+    c = catalog_2026()
+    c = c[(c.model == model) & (c.features == features) & (c.horizon == horizon)]
+    if c.empty:
+        return None
+    frames = [pd.read_csv(PRED_2026_DIR / f"{s}.csv", parse_dates=["origin_date", "target_date"]) for s in c["stem"]]
+    out = frames[0][["origin_date", "target_date", "base_price", "true_price"]].copy()
+    preds = np.column_stack([f["pred_price"].to_numpy() for f in frames])
+    out["pred_price"] = preds.mean(axis=1)
+    out["n_seeds"] = preds.shape[1]
+    return out
+
+
+@st.cache_data
+def comparison_2026() -> pd.DataFrame:
+    """Metrics on the 2026 days that EVERY 2026 forecast covers (per horizon), plus the random walk
+    (forecast = price at the origin), so all rows are compared like for like."""
+    c = catalog_2026()
+    rows = []
+    for h in sorted(c.horizon.unique()) if not c.empty else []:
+        pairs = sorted({(r.model, r.features) for r in c[c.horizon == h].itertuples()},
+                       key=lambda p: (MODEL_ORDER.get(p[0], 9), FEATURE_ORDER.get(p[1], 9)))
+        data = {p: forecasts_2026(*p, h) for p in pairs}
+        common = set.intersection(*[set(d.origin_date) for d in data.values()])
+        ref = None
+        for (model, feats), d in data.items():
+            d = d[d.origin_date.isin(common)].sort_values("origin_date")
+            ref = d if ref is None else ref
+            rows.append({"horizon": h, "model": model, "features": feats, "config": config_label(model, feats),
+                         "n_days": len(d), **all_metrics(d.true_price, d.pred_price, d.base_price)})
+        rw = all_metrics(ref.true_price, ref.base_price, ref.base_price)
+        rw["DirAcc"] = np.nan
+        rows.append({"horizon": h, "model": "rw", "features": "price_only", "config": "Random walk",
+                     "n_days": len(ref), **rw})
+        for r in rows:
+            if r["horizon"] == h:
+                r["Skill"] = 100 * (1 - r["RMSE"] / rw["RMSE"])
+    return pd.DataFrame(rows)
+
+
+@st.cache_data
+def dm_tests_2026() -> pd.DataFrame:
+    """Each input set against price only for the same network and horizon, on common 2026 days."""
+    c = catalog_2026()
+    rows = []
+    for (model, h), g in c.groupby(["model", "horizon"]) if not c.empty else []:
+        feats = sorted(set(g.features))
+        if "price_only" not in feats:
+            continue
+        base = forecasts_2026(model, "price_only", h)
+        for f in feats:
+            if f == "price_only":
+                continue
+            j = forecasts_2026(model, f, h).merge(base, on="origin_date", suffixes=("", "_b"))
+            r = diebold_mariano(j.true_price, j.pred_price, j.pred_price_b, h=h)
+            rows.append({"horizon": h, "model": config_label(model, f), "vs": config_label(model, "price_only"),
+                         "DM": r["DM"], "p_value": r["p_value"], "n": len(j)})
+    return pd.DataFrame(rows, columns=["horizon", "model", "vs", "DM", "p_value", "n"])
+
+
+# -----------------------------------------------------------------------------
+# Satellite track (Code/satellite): written by s04-s07
+# -----------------------------------------------------------------------------
+def _csv(path: Path, **kw) -> pd.DataFrame | None:
+    return pd.read_csv(path, **kw) if path.exists() else None
+
+
+@st.cache_data
+def sat_series() -> pd.DataFrame | None:
+    return _csv(SAT_DIR / "data" / "series" / "supply_by_scene.csv", parse_dates=["date"])
+
+
+@st.cache_data
+def sat_vs_ais() -> pd.DataFrame | None:
+    return _csv(SAT_DIR / "data" / "series" / "satellite_vs_ais_weekly.csv", index_col=0, parse_dates=True)
+
+
+@st.cache_data
+def sat_calibration() -> dict:
+    f = SAT_DIR / "data" / "series" / "calibration.json"
+    return json.loads(f.read_text()) if f.exists() else {}
+
+
+@st.cache_data
+def portwatch_hormuz() -> pd.DataFrame | None:
+    """Daily AIS transits through Hormuz saved by s07 (or by the s00 check)."""
+    df = _csv(SAT_DIR / "data" / "series" / "portwatch_hormuz_daily.csv")
+    if df is None:
+        return None
+    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
+    return df.sort_values("date")
+
+
+@st.cache_data
+def sat_features() -> pd.DataFrame | None:
+    """Business-day features for the price model, written by s07 (Code/data/processed/)."""
+    return _csv(CODE_DIR / "data" / "processed" / "satellite_features.csv", index_col=0, parse_dates=True)
+
+
+@st.cache_data
+def detector_runs() -> pd.DataFrame:
+    """One row per trained ship detector (Code/satellite/runs/<tag>/metrics.json)."""
+    rows = []
+    for f in sorted((SAT_DIR / "runs").glob("*/metrics.json")) if (SAT_DIR / "runs").exists() else []:
+        d = json.loads(f.read_text())
+        a = d.get("args", {})
+        row = {"run": f.parent.name, "backbone": a.get("backbone"), "sources": "+".join(a.get("sources", [])),
+               "init": a.get("init") or "", "epochs": d.get("best_epoch"), "n_train": d.get("n_train")}
+        for split in ("val", "test"):
+            for k in ("ap", "precision", "recall", "f1", "count_mae"):
+                row[f"{split}_{k}"] = d.get(split, {}).get(k)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+@st.cache_data
+def detector_history(run: str) -> pd.DataFrame | None:
+    return _csv(SAT_DIR / "runs" / run / "history.csv")
+
+
+def sat_figure(name: str) -> Path | None:
+    f = SAT_DIR / "figures" / name
+    return f if f.exists() else None
+
+
+def sat_quicklooks() -> list[Path]:
+    d = SAT_DIR / "figures" / "quicklooks"
+    return sorted(d.glob("*.png")) if d.exists() else []
+
+
+# -----------------------------------------------------------------------------
+# Price charts as images (slide 9): the same drawing the image CNN is trained on
+# -----------------------------------------------------------------------------
+def chart_image(prices: np.ndarray, height: int = 64, width: int = 64, line: int = 1) -> np.ndarray:
+    """Draw a price path as a black-and-white image (1 = ink): x is time, y is the min-max scaled price.
+    Consecutive points are joined with straight segments so the chart has no gaps."""
+    p = np.asarray(prices, dtype=float)
+    p = (p - p.min()) / (p.max() - p.min() + 1e-12)
+    img = np.zeros((height, width), dtype=np.uint8)
+    xs = np.linspace(0, width - 1, len(p))
+    ys = (1 - p) * (height - 1)
+    for i in range(len(p) - 1):
+        n = int(max(abs(xs[i + 1] - xs[i]), abs(ys[i + 1] - ys[i]))) * 2 + 2
+        xx = np.linspace(xs[i], xs[i + 1], n).round().astype(int)
+        yy = np.linspace(ys[i], ys[i + 1], n).round().astype(int)
+        for dy in range(-(line // 2), line // 2 + 1):
+            img[np.clip(yy + dy, 0, height - 1), xx] = 1
+    return img
 
 
 # -----------------------------------------------------------------------------
@@ -453,7 +633,7 @@ def checkpoints() -> pd.DataFrame:
     rows = []
     for f in sorted(MODEL_DIR.glob("*.pt")):
         m = RUN_RE.match(f.stem)
-        if m:
+        if m and m[1] in ("lstm", "gru"):                 # the lab rebuilds RNNForecaster checkpoints only
             rows.append({"model": m[1], "features": m[2], "horizon": int(m[3]), "seed": int(m[4]), "stem": f.stem})
     return pd.DataFrame(rows, columns=["model", "features", "horizon", "seed", "stem"])
 
