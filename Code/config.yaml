@@ -39,8 +39,11 @@ data:
     XLE: "XLE"              # Energy sector ETF
 
   # How to treat WTI's negative print on 2020-04-20 (-37.63 USD/bbl).
-  # "clip" -> floor at min_price, "drop" -> remove the day, "keep" -> leave it.
-  negative_price_policy: "clip"
+  # "clip" -> floor at min_price, "drop" -> remove the day, "keep" -> leave it,
+  # "interpolate" -> replace with a time interpolation of the neighbouring days.
+  # Clipping at $1 creates log returns of -290% and +219% on 20/21 April, which
+  # doubles the measured volatility and distorts ARIMA (1-day RMSE 2.12 vs 1.93).
+  negative_price_policy: "interpolate"
   min_price: 1.0
 
 # -----------------------------------------------------------------------------
@@ -84,8 +87,15 @@ training:
 # -----------------------------------------------------------------------------
 baselines:
   arima_order: [1, 1, 1]    # set auto: true to search with pmdarima instead
-  auto: false
+  auto: false               # true -> pmdarima.auto_arima on TRAIN log prices (d fixed at 1)
+  max_p: 5                  # search limits for auto
+  max_q: 5
   refit_every: 20           # refit ARIMA every N test steps (rolling origin)
+  # ARIMAX drivers (as in Okasha & Zaher 2026): "all" or a list of column names.
+  # Each driver enters as its return / difference of the PREVIOUS day, so the
+  # first forecast step uses only information known at the origin; later steps
+  # set future driver moves to 0 (random-walk forecast of the drivers).
+  exog: "all"
 
 # -----------------------------------------------------------------------------
 # SHAP (05_shap_analysis.py)
