@@ -18,6 +18,7 @@ data:
   end_date: "2025-12-31"
   frequency: "B"            # "B" = business daily, "W-FRI" = weekly (Friday close)
   target: "WTI"             # "WTI" or "BRENT" (column name after renaming below)
+  ohlcv_tickers: {WTI: "CL=F"}
 
   # FRED series are downloaded as CSV from fred.stlouisfed.org (no API key needed).
   fred_series:
