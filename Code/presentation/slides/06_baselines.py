@@ -1,4 +1,4 @@
-"""Benchmarks: random walk and rolling ARIMA on the same test origins."""
+"""Statistical models: random walk, rolling ARIMA and ARIMAX on the same test origins."""
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -12,11 +12,12 @@ theme.header(KEY)
 
 cfg = L.config()
 comp = L.comparison()
-base = comp[comp.model.isin(["rw", "arima"])]
+base = comp[comp.model.isin(L.BASELINES)] if not comp.empty else comp
+models = [m for m in L.BASELINES if not base.empty and m in set(base.model)]
 
 left, right = st.columns([1, 1.3], gap="large")
 with left:
-    st.subheader("Two baselines")
+    st.subheader("Three statistical models")
     st.markdown("**Random walk.** Tomorrow's price is today's price.")
     st.latex(r"\hat P_{t+h} = P_t")
     order = tuple(cfg["baselines"]["arima_order"])
@@ -24,11 +25,19 @@ with left:
                 f"{cfg['baselines']['refit_every']} test days and updated with each new observation, so it only "
                 "ever uses data up to the forecast origin.")
     st.latex(r"\Delta \log P_t = c + \phi\, \Delta \log P_{t-1} + \varepsilon_t + \theta\, \varepsilon_{t-1}")
+    st.markdown("**ARIMAX** is the same model with the market drivers (dollar, rates, VIX, gold, S&P 500, ...) "
+                "as regressors, lagged one day so only known information enters:")
+    st.latex(r"\Delta \log P_t = c + \phi\, \Delta \log P_{t-1} + \beta^\top x_{t-1} + \varepsilon_t + \theta\, \varepsilon_{t-1}")
+    if "arimax" not in models:
+        st.info("ARIMAX forecasts are not in yet. Save them as `results/predictions/baseline_arimax_h<h>.csv` "
+                "(columns origin_date, target_date, base_price, true_price, pred_price) and press Reload data.",
+                icon=":material/pending:")
 
     if base.empty:
         theme.pending("No baseline forecasts yet.", "python 03_baselines.py")
     else:
-        show = base.pivot_table(index="config", columns="horizon", values="RMSE").reindex(["Random walk", "ARIMA"])
+        show = base.pivot_table(index="config", columns="horizon", values="RMSE").reindex(
+            [L.MODEL_LABELS[m] for m in models])
         show.columns = [f"h = {c}" for c in show.columns]
         show.index.name = "Model"
         st.markdown("**Test RMSE, USD per barrel**")
@@ -39,7 +48,7 @@ with right:
         metric = st.segmented_control("Metric", ["RMSE", "MAE", "MAPE"], default="RMSE", required=True,
                                       help=L.METRIC_HELP["RMSE"])
         fig = go.Figure()
-        for model in ("rw", "arima"):
+        for model in models:
             d = base[base.model == model].sort_values("horizon")
             fig.add_trace(go.Scatter(x=d.horizon, y=d[metric], name=L.MODEL_LABELS[model], mode="lines+markers",
                                      line=dict(color=theme.BASELINE_COLORS[model], width=2, dash=theme.config_dash(model)),
@@ -56,10 +65,11 @@ with right:
                    "growth slower than that hints at mean reversion over longer horizons.")
 
 if not base.empty:
-    st.subheader("Rolling ARIMA vs. no change, up close")
+    st.subheader("ARIMA and ARIMAX vs. no change, up close")
     h = st.segmented_control("Horizon", sorted(base.horizon.unique()), default=int(base.horizon.min()),
                              format_func=lambda x: f"{x} day" + ("s" if x > 1 else ""), required=True, key="bh")
     rw, ar = L.forecasts("rw", "price_only", h), L.forecasts("arima", "price_only", h)
+    ax = L.forecasts("arimax", "all", h)
     if rw is not None and ar is not None:
         start, end = st.select_slider("Window", options=list(rw.target_date),
                                       value=(rw.target_date.iloc[0], rw.target_date.iloc[min(120, len(rw) - 1)]),
@@ -72,6 +82,10 @@ if not base.empty:
                                  line=dict(color=theme.BASELINE_COLORS["rw"], width=1.6)))
         fig.add_trace(go.Scatter(x=ar.target_date[m], y=ar.pred_price[m], name="ARIMA", mode="lines",
                                  line=dict(color=theme.BASELINE_COLORS["arima"], width=1.6, dash="dash")))
+        if ax is not None:
+            mx = (ax.target_date >= start) & (ax.target_date <= end)
+            fig.add_trace(go.Scatter(x=ax.target_date[mx], y=ax.pred_price[mx], name="ARIMAX", mode="lines",
+                                     line=dict(color=theme.BASELINE_COLORS["arimax"], width=1.6, dash="longdash")))
         fig.update_layout(hovermode="x unified", yaxis_title="USD per barrel")
         theme.show(fig, height=320)
         diff = (ar.pred_price - rw.pred_price).abs()

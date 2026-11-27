@@ -62,10 +62,9 @@ with c1:
     cell = st.segmented_control("Cell", ["lstm", "gru"], default=m["type"], format_func=str.upper, required=True)
     hidden = st.select_slider("Hidden units per layer", [16, 32, 64, 128, 256], value=m["hidden_size"])
     layers = st.select_slider("Layers", [1, 2, 3, 4], value=m["num_layers"])
-    sel_n = 1 + int(cfg["shap"]["top_k"])
-    n_in = st.segmented_control("Input set", {f"Price only (1)": 1, f"SHAP-selected ({sel_n})": sel_n,
-                                              f"All features ({n_all})": n_all}.keys(),
-                                default=f"All features ({n_all})", required=True)
+    n_in = st.segmented_control("Input set", {f"Price only (1)": 1, f"Price + market drivers ({n_all})": n_all,
+                                              f"Price + satellite supply (4)": 4}.keys(),
+                                default=f"Price + market drivers ({n_all})", required=True)
     n_in = int(n_in.split("(")[1].rstrip(")"))
 
 

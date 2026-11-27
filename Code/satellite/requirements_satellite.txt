@@ -1,0 +1,17 @@
+# Satellite track (Code/satellite). Install on top of Code/requirements.txt.
+torchvision>=0.17        # Faster R-CNN + COCO/ImageNet weights
+rasterio>=1.3            # reads Cloud-Optimized GeoTIFFs (bundles GDAL)
+pyproj>=3.6
+shapely>=2.0
+pystac>=1.9
+pystac-client>=0.7       # Earth Search STAC API
+pillow>=10.0
+scipy>=1.11
+matplotlib>=3.8
+pandas>=2.1
+pyyaml>=6.0
+requests>=2.31
+# optional
+# torchgeo>=0.6          # --backbone ssl4eo (Sentinel-2 self-supervised weights)
+# asf_search>=7.0        # s01b: Sentinel-1 search at NASA ASF DAAC
+# hyp3_sdk>=6.0          # s01b: NASA HyP3 radiometric terrain correction

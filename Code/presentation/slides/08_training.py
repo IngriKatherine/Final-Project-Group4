@@ -35,7 +35,7 @@ with left:
         ("Clipping", f"gradient norm {t['grad_clip']:g}"),
         ("Dropout", f"{cfg['model']['dropout']:g} between layers and before the head"),
         ("Seeds", ", ".join(map(str, cfg["experiments"]["seeds"])) + " per configuration"),
-        ("Hardware", "AWS GPU instance; SHAP on CPU"),
+        ("Hardware", "AWS GPU instance (g5.xlarge, A10G)"),
     ]
     st.html('<dl class="spec">' + "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows) + "</dl>")
 with right:
