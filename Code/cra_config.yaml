@@ -1,0 +1,78 @@
+# =============================================================================
+# Chronos-anchored gated residual LSTM (issue #10).
+# Read by scripts 15-18 and oilfc/cra_*.py. The original pipeline keeps using
+# config.yaml; its `training` block is reused here for the baseline LSTM.
+# =============================================================================
+
+seed: 42
+
+paths:
+  raw_dir: data/cra/raw
+  processed_dir: data/cra/processed
+  results_dir: results/cra
+
+# -----------------------------------------------------------------------------
+# Data (15_cra_fetch_data.py)
+# -----------------------------------------------------------------------------
+data:
+  start_date: "2000-01-01"
+  fred_series:
+    WTI: DCOILWTICO         # EIA spot, USD/bbl; defines the trading calendar
+    BRENT: DCOILBRENTEU
+    HEATOIL: DHOILNYH       # NY Harbor No. 2 heating oil, USD/gal
+    OVX: OVXCLS             # Cboe crude oil volatility index, starts 2007-05-10
+    UST10Y: DGS10
+    BREAKEVEN10Y: T10YIE
+  yahoo_tickers:
+    DXY: "DX-Y.NYB"
+    VIX: "^VIX"
+    XLE: "XLE"
+  gpr_url: "https://www.matteoiacoviello.com/gpr_files/data_gpr_daily_recent.xls"
+  gpr_lag_days: 1           # GPR of day d is used from day d+1 on
+  ffill_limit: 5            # max trading days a non-WTI series is carried forward
+  interp_exclusion_rows: 90 # origins after an interpolated WTI price excluded from the loss
+
+# -----------------------------------------------------------------------------
+# Framing and evaluation protocol
+# -----------------------------------------------------------------------------
+framing:
+  lookback: 30
+  horizons: [1, 5, 20]
+  ewma_lambda: 0.94         # RiskMetrics decay for the ex-ante volatility
+
+evaluation:
+  test_years: [2022, 2023, 2024, 2025]
+  holdout_years: [2026]     # after the Chronos-2 release (Oct 2025)
+  val_years: 1              # refit for year Y: train targets <= Y-1-val_years, val = the year(s) before Y
+  seeds: [0, 1, 2, 3, 4]
+
+# -----------------------------------------------------------------------------
+# Chronos-2 prior (16_cra_chronos_prior.py)
+# -----------------------------------------------------------------------------
+chronos:
+  model: "amazon/chronos-2"
+  context_length: 512
+  batch_size: 256
+  covariates: ["BRENT", "HEATOIL", "OVX"]   # past-only, as log levels
+  quantiles: [0.1, 0.5, 0.9]
+
+# -----------------------------------------------------------------------------
+# Model and training (17_cra_train.py)
+# -----------------------------------------------------------------------------
+model:
+  hidden_size: 32
+  num_layers: 1
+  dropout: 0.1
+  feature_dropout: 0.1      # drops whole input channels during training
+  gate_bias: -3.0           # sigmoid(-3) = 0.047
+
+training:
+  batch_size: 64
+  max_epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  patience: 15
+  grad_clip: 1.0
+  huber_delta: 1.0
+  lambda_huber: 1.0
+  lambda_gate: 0.01

@@ -1,0 +1,60 @@
+{
+  "downloaded_at": "2026-11-24T03:10:52",
+  "gpr_url": "https://www.matteoiacoviello.com/gpr_files/data_gpr_daily_recent.xls",
+  "fred": {
+    "WTI": {
+      "first": "2000-01-04",
+      "last": "2026-11-17",
+      "n_obs": 6362
+    },
+    "BRENT": {
+      "first": "2000-01-04",
+      "last": "2026-11-17",
+      "n_obs": 6511
+    },
+    "HEATOIL": {
+      "first": "2000-01-05",
+      "last": "2026-11-17",
+      "n_obs": 6331
+    },
+    "OVX": {
+      "first": "2007-05-10",
+      "last": "2026-11-20",
+      "n_obs": 4918
+    },
+    "UST10Y": {
+      "first": "2000-01-03",
+      "last": "2026-11-20",
+      "n_obs": 6725
+    },
+    "BREAKEVEN10Y": {
+      "first": "2003-01-02",
+      "last": "2026-11-23",
+      "n_obs": 5977
+    }
+  },
+  "yahoo": {
+    "DXY": {
+      "first": "2000-01-03",
+      "last": "2026-11-24",
+      "n_obs": 6794
+    },
+    "VIX": {
+      "first": "2000-01-03",
+      "last": "2026-11-23",
+      "n_obs": 6766
+    },
+    "XLE": {
+      "first": "2000-01-03",
+      "last": "2026-11-23",
+      "n_obs": 6764
+    }
+  },
+  "gpr": {
+    "GPR": {
+      "first": "1985-01-01",
+      "last": "2026-11-23",
+      "n_obs": 15302
+    }
+  }
+}

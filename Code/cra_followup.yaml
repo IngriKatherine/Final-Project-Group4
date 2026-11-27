@@ -1,0 +1,37 @@
+# =============================================================================
+# Follow-up to issue #10: Chronos-2 forecasts as input features (scripts 19-21).
+# Designed after the 18_cra_evaluate.py results were seen, so the 2026 period
+# is not an untouched holdout for this model. Data, framing, evaluation and the
+# Chronos prior come from cra_config.yaml; only the blocks below are new.
+# =============================================================================
+
+paths:
+  results_dir: results/cra/followup
+
+# Point-in-time GPR (19_cra_fetch_gpr_vintages.py)
+# The daily file is published every Monday (next business day after a federal
+# holiday) and includes that Monday. Archived weekly vintages start 2022-02-24.
+gpr:
+  vintage_api: "https://api.github.com/repos/iacoviel/iacoviel.github.io/contents/gpr_archive_files"
+  vintage_raw: "https://raw.githubusercontent.com/iacoviel/iacoviel.github.io/master/gpr_archive_files"
+  keep_days: 21             # tail of each vintage stored (for the revision check)
+  usable_after_days: 1      # a release on day V is used from day V+1 on
+  staleness_rows: 10        # weekly releases: allow up to two weeks of carry-forward
+
+model:
+  hidden_size: 32
+  num_layers: 1
+  dropout: 0.1
+  feature_dropout: 0.1      # drops whole input channels during training
+  prior_dropout: 0.2        # drops the whole Chronos block per sample during training
+
+training:
+  batch_size: 64
+  max_epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  patience: 15
+  grad_clip: 1.0
+  huber_delta: 1.0
+  lambda_huber: 1.0
+  lambda_gate: 0.0          # no penalty: the model decides how much to use Chronos

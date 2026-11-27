@@ -1,0 +1,5 @@
+# Extra packages for the gated residual LSTM (scripts 15-18). Install on top of requirements.txt:
+#     pip install -r requirements.txt -r requirements-cra.txt
+chronos-forecasting>=2.0   # Chronos2Pipeline (amazon/chronos-2 weights, ~0.5 GB, downloaded on first use)
+xlrd>=2.0                  # reads the daily GPR .xls file
+pytest>=8.0                # tests/test_cra.py
